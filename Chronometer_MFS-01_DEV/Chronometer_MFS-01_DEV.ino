@@ -100,6 +100,8 @@ void setup() {
 
   // buzzer pin to output
   pinMode(BUZZER, OUTPUT);
+  // buzzer off
+  digitalWrite(BUZZER, OFF);
 
   // extinguishing all LEDs
   digitalWrite(LED1, OFF);
