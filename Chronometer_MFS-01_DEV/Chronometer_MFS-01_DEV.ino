@@ -307,7 +307,7 @@ void loop() {
   // hourly signal
   if (s == 0 && md == 0 && me == 0 && millis() % 1000 == 0)
   {
-    digitalWrite(BUZZER, ON);1
+    digitalWrite(BUZZER, ON);
     delay(10);
     digitalWrite(BUZZER, OFF);
   }
