@@ -4,12 +4,11 @@
   Features:
   > Precision clock accuracy
     (limited by the accuracy of the quartz oscillator on the Arduino board)
-  > Hourly signal (currently with no option to disable)
-  > Every second click to instantly check the accuracy of the clock using the "Clock Tuner" app (currently with no option to disable)
+  > Hourly signal
+  > Every second click to instantly check the accuracy of the clock using the "Clock Tuner" app
   > Displaying minutes and seconds when button 3 is pressed
-  v0.2.3 08.05.2022
+  v0.3.1 16.02.2025
 */
-
 
 // avr-libc library includes
 #include <avr/io.h>
@@ -27,9 +26,9 @@
 
 // LEDs
 #define LED1 13  // LED 1 (reserved for indicating that the alarm clock is on)
-#define LED2 12  // LED 2 (reserved to indicate the activation of the hourly signal)
-#define LED3 11  // LED 3
-#define LED4 10  // LED 4
+#define LED2 12  // LED 2
+#define LED3 11  // LED 3 (indicate the activation of the hourly signal)
+#define LED4 10  // LED 4 (indicate the activation of every second click)
 
 // buzzer
 #define BUZZER 3  // buzzer pin
@@ -52,7 +51,7 @@ const byte SEGMENT_MAP[] = {
 };
 
 // bit masks for selecting a display digit from 1 to 4
-const byte SEGMENT_SELECT[] = {
+const byte DIGIT_POSITION[] = {
   0b10000000,
   0b01000000,
   0b00100000,
@@ -66,9 +65,13 @@ volatile byte md = 0;  // tens of minutes
 volatile byte me = 0;  // tens of minutes
 volatile byte s = 0;   // seconds
 
+volatile bool hourSignalPlayed = false;
+volatile bool isClickEnabled = false;
+volatile bool isChimeEnabled = false;
+
 // accuracy corrector
 // number of counts per second (by default 16624, 15613 for the original Arduino Uno, 15500 and 15510 for RobotDyn board)
-const unsigned short CORR = 15510;
+const unsigned short CORR = 15511;
 
 // list of display modes
 enum displayModeValues {
@@ -80,6 +83,10 @@ enum displayModeValues {
 
 // current display mode
 byte displayMode = MODE_SET_CLOCK_TIME;
+
+void showDigit(int digit, int position, bool isPointOn = false);
+void clockDisp();
+void setClockDisp();
 
 void setup() {
   // setting the pins of the indicator registers to the output
@@ -95,8 +102,8 @@ void setup() {
   // LED pins to output
   pinMode(LED1, OUTPUT);
   pinMode(LED2, OUTPUT);
-  pinMode(LED3, OUTPUT);
-  pinMode(LED4, OUTPUT);
+  pinMode(LED3, OUTPUT);  // chime
+  pinMode(LED4, OUTPUT);  // click
 
   // buzzer pin to output
   pinMode(BUZZER, OUTPUT);
@@ -145,28 +152,9 @@ void loop() {
             he++;
           }
           for (int k = 0; k < 300; k++) {
-            digitalWrite(LATCH_DIO, LOW);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[hd]);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[0]);
-            digitalWrite(LATCH_DIO, HIGH);
-
-            digitalWrite(LATCH_DIO, LOW);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[he]);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[1]);
-            digitalWrite(LATCH_DIO, HIGH);
-
-            digitalWrite(LATCH_DIO, LOW);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[md]);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[2]);
-            digitalWrite(LATCH_DIO, HIGH);
-
-            digitalWrite(LATCH_DIO, LOW);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[me]);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[3]);
-            digitalWrite(LATCH_DIO, HIGH);
+            setClockDisp();
           }
         }
-
 
         if (digitalRead(B_02) == LOW) {
           if (me == 9) {
@@ -180,53 +168,10 @@ void loop() {
             me++;
           }
           for (int k = 0; k < 300; k++) {
-            digitalWrite(LATCH_DIO, LOW);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[hd]);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[0]);
-            digitalWrite(LATCH_DIO, HIGH);
-
-
-            digitalWrite(LATCH_DIO, LOW);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[he]);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[1]);
-            digitalWrite(LATCH_DIO, HIGH);
-
-
-            digitalWrite(LATCH_DIO, LOW);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[md]);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[2]);
-            digitalWrite(LATCH_DIO, HIGH);
-
-
-            digitalWrite(LATCH_DIO, LOW);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[me]);
-            shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[3]);
-            digitalWrite(LATCH_DIO, HIGH);
+            setClockDisp();
           }
         }
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[hd]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[0]);
-        digitalWrite(LATCH_DIO, HIGH);
-
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[he]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[1]);
-        digitalWrite(LATCH_DIO, HIGH);
-
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[md]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[2]);
-        digitalWrite(LATCH_DIO, HIGH);
-
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[me]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[3]);
-        digitalWrite(LATCH_DIO, HIGH);
+        setClockDisp();
       }
       s = 0;
       displayMode = MODE_CLOCK_TIME;
@@ -236,45 +181,32 @@ void loop() {
     // current time mode
     case MODE_CLOCK_TIME:
       if (digitalRead(B_03) == LOW) {
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[md]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[0]);
-        digitalWrite(LATCH_DIO, HIGH);
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[me]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[1]);
-        digitalWrite(LATCH_DIO, HIGH);
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[s / 10]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[2]);
-        digitalWrite(LATCH_DIO, HIGH);
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[s % 10]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[3]);
-        digitalWrite(LATCH_DIO, HIGH);
+        showDigit(md, 0);
+        showDigit(me, 1);
+        showDigit(s / 10, 2);
+        showDigit(s % 10, 3);
+        if (digitalRead(B_02) == LOW) {
+          isClickEnabled = !isClickEnabled;
+          digitalWrite(LED4, isClickEnabled ? ON : OFF);
+          for (int k = 0; k < 300; k++) {
+            showDigit(md, 0);
+            showDigit(me, 1);
+            showDigit(s / 10, 2);
+            showDigit(s % 10, 3);
+          }
+        }
+        if (digitalRead(B_01) == LOW) {
+          isChimeEnabled = !isChimeEnabled;
+          digitalWrite(LED3, isChimeEnabled ? ON : OFF);
+          for (int k = 0; k < 300; k++) {
+            showDigit(md, 0);
+            showDigit(me, 1);
+            showDigit(s / 10, 2);
+            showDigit(s % 10, 3);
+          }
+        }
       } else {
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[hd]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[0]);
-        digitalWrite(LATCH_DIO, HIGH);
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[he] - 1);  // turning on the dividing point LED in the tens of hours digit
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[1]);
-        digitalWrite(LATCH_DIO, HIGH);
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[md]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[2]);
-        digitalWrite(LATCH_DIO, HIGH);
-
-        digitalWrite(LATCH_DIO, LOW);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[me]);
-        shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[3]);
-        digitalWrite(LATCH_DIO, HIGH);
+        clockDisp();
       }
       break;
   }
@@ -282,34 +214,17 @@ void loop() {
   if (!digitalRead(B_01) && !digitalRead(B_02)) {
     displayMode = MODE_SET_CLOCK_TIME;
     for (int k = 0; k < 300; k++) {
-      digitalWrite(LATCH_DIO, LOW);
-      shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[hd]);
-      shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[0]);
-      digitalWrite(LATCH_DIO, HIGH);
-
-      digitalWrite(LATCH_DIO, LOW);
-      shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[he]);
-      shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[1]);
-      digitalWrite(LATCH_DIO, HIGH);
-
-      digitalWrite(LATCH_DIO, LOW);
-      shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[md]);
-      shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[2]);
-      digitalWrite(LATCH_DIO, HIGH);
-
-      digitalWrite(LATCH_DIO, LOW);
-      shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_MAP[me]);
-      shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, SEGMENT_SELECT[3]);
-      digitalWrite(LATCH_DIO, HIGH);
+      setClockDisp();
     }
   }
 
   // hourly signal
-  if (s == 0 && md == 0 && me == 0 && millis() % 1000 == 0)
+  if (isChimeEnabled && s == 0 && md == 0 && me == 0 && !hourSignalPlayed)
   {
     digitalWrite(BUZZER, ON);
     delay(10);
     digitalWrite(BUZZER, OFF);
+    hourSignalPlayed = true;
   }
 }
 
@@ -317,13 +232,16 @@ void loop() {
 ISR(TIMER1_COMPA_vect)  // interrupt handler, clocking the running of the current time
 {
   if (displayMode != MODE_SET_CLOCK_TIME) s++;
-  digitalWrite(BUZZER, ON);  // buzzer on (for every second click)
+    if (isClickEnabled) {
+      digitalWrite(BUZZER, ON);  // buzzer on (for every second click)
+    }
   if (s == 60) {
     s = 0;
     if (me == 9) {
       me = 0;
       if (md == 5) {
         md = 0;
+        hourSignalPlayed = false;
         if (hd == 2) {
           if (he == 3) {
             he = 0;
@@ -340,5 +258,29 @@ ISR(TIMER1_COMPA_vect)  // interrupt handler, clocking the running of the curren
     } else
       me++;
   }
-  digitalWrite(BUZZER, OFF);  // buzzer off
+  if (isClickEnabled) {
+    digitalWrite(BUZZER, OFF);  // buzzer off
+  }
+}
+
+void showDigit(int digit, int position, bool isPointOn) {
+  digitalWrite(LATCH_DIO, LOW);
+  int displayValue = isPointOn ? SEGMENT_MAP[digit] - 1 : SEGMENT_MAP[digit];  // turning on the dividing point LED in the tens of hours digit
+  shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, displayValue);
+  shiftOut(DATA_DIO, CLK_DIO, LSBFIRST, DIGIT_POSITION[position]);
+  digitalWrite(LATCH_DIO, HIGH);
+}
+
+void clockDisp() {
+  showDigit(hd, 0);
+  showDigit(he, 1, true);  // turning on the dividing point LED in the tens of hours digit
+  showDigit(md, 2);
+  showDigit(me, 3);
+}
+
+void setClockDisp() {
+  showDigit(hd, 0);
+  showDigit(he, 1);
+  showDigit(md, 2);
+  showDigit(me, 3);
 }
